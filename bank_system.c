@@ -15,7 +15,7 @@ typedef struct {
     int id;
     char name[MAX_NAME_LEN];
     float balance;
-    char password[MAX_PASS_LEN]; // For simplicity, stored as plain text here
+    char password[MAX_PASS_LEN];
 } Account;
 
 Account accounts[MAX_ACCOUNTS];
