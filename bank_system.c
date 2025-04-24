@@ -1,18 +1,15 @@
-// Bank Management System in C 
-// Features: User login, account management, transactions, file handling, basic encryption (password masking)
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define MAX_ACCOUNTS 100
 #define MAX_NAME_LEN 50
 #define MAX_PASS_LEN 20
 #define FILENAME "accounts.txt"
 
-// Structure to hold account info
 typedef struct {
-    int id;
+    int accountNumber;
     char name[MAX_NAME_LEN];
     float balance;
     char password[MAX_PASS_LEN];
@@ -31,16 +28,23 @@ void withdraw(Account* acc);
 void checkBalance(Account acc);
 void transfer(Account* acc);
 void clearInput();
+int generateUniqueAccountNumber();
 
 int main() {
     int choice;
+    srand(time(NULL)); // Seed for random account number
     loadAccounts();
+
+    printf("====================================\n");
+    printf("      Welcome to Jamii Bank!\n");
+    printf("====================================\n");
+
     do {
-        printf("\n==== Bank Management System ====");
-        printf("\n1. Create Account");
-        printf("\n2. Login");
-        printf("\n3. Exit");
-        printf("\nChoose an option: ");
+        printf("\n==== Main Menu ====\n");
+        printf("1. Create Account\n");
+        printf("2. Login\n");
+        printf("3. Exit\n");
+        printf("Choose an option: ");
         scanf("%d", &choice);
         clearInput();
         switch (choice) {
@@ -58,7 +62,7 @@ int main() {
 void loadAccounts() {
     FILE *file = fopen(FILENAME, "r");
     if (file == NULL) return;
-    while (fscanf(file, "%d,%49[^,],%f,%19s", &accounts[totalAccounts].id,
+    while (fscanf(file, "%d,%49[^,],%f,%19s", &accounts[totalAccounts].accountNumber,
                   accounts[totalAccounts].name, &accounts[totalAccounts].balance,
                   accounts[totalAccounts].password) == 4) {
         totalAccounts++;
@@ -70,10 +74,27 @@ void loadAccounts() {
 void saveAccounts() {
     FILE *file = fopen(FILENAME, "w");
     for (int i = 0; i < totalAccounts; i++) {
-        fprintf(file, "%d,%s,%.2f,%s\n", accounts[i].id, accounts[i].name,
+        fprintf(file, "%08d,%s,%.2f,%s\n", accounts[i].accountNumber, accounts[i].name,
                 accounts[i].balance, accounts[i].password);
     }
     fclose(file);
+}
+
+// Generate unique 8-digit account number
+int generateUniqueAccountNumber() {
+    int accNum;
+    int exists;
+    do {
+        accNum = 10000000 + rand() % 90000000;
+        exists = 0;
+        for (int i = 0; i < totalAccounts; i++) {
+            if (accounts[i].accountNumber == accNum) {
+                exists = 1;
+                break;
+            }
+        }
+    } while (exists);
+    return accNum;
 }
 
 // Create a new account
@@ -82,8 +103,9 @@ void createAccount() {
         printf("Cannot create more accounts.\n");
         return;
     }
+
     Account newAcc;
-    newAcc.id = totalAccounts + 1;
+    newAcc.accountNumber = generateUniqueAccountNumber();
     printf("Enter name: ");
     fgets(newAcc.name, MAX_NAME_LEN, stdin);
     newAcc.name[strcspn(newAcc.name, "\n")] = 0;
@@ -91,24 +113,27 @@ void createAccount() {
     fgets(newAcc.password, MAX_PASS_LEN, stdin);
     newAcc.password[strcspn(newAcc.password, "\n")] = 0;
     newAcc.balance = 0.0;
+
     accounts[totalAccounts++] = newAcc;
     saveAccounts();
-    printf("Account created! Your ID is %d\n", newAcc.id);
+
+    printf("Account created successfully!\n");
+    printf("Your 8-digit Account Number is: %08d\n", newAcc.accountNumber);
 }
 
 // Login function
 void login() {
-    int id;
+    int accNum;
     char pass[MAX_PASS_LEN];
-    printf("Enter ID: ");
-    scanf("%d", &id);
+    printf("Enter 8-digit Account Number: ");
+    scanf("%d", &accNum);
     clearInput();
     printf("Enter password: ");
     fgets(pass, MAX_PASS_LEN, stdin);
     pass[strcspn(pass, "\n")] = 0;
 
     for (int i = 0; i < totalAccounts; i++) {
-        if (accounts[i].id == id && strcmp(accounts[i].password, pass) == 0) {
+        if (accounts[i].accountNumber == accNum && strcmp(accounts[i].password, pass) == 0) {
             printf("Login successful. Welcome %s!\n", accounts[i].name);
             int opt;
             do {
@@ -120,7 +145,10 @@ void login() {
                     case 2: withdraw(&accounts[i]); break;
                     case 3: checkBalance(accounts[i]); break;
                     case 4: transfer(&accounts[i]); break;
-                    case 5: printf("Logging out...\n"); break;
+                    case 5: 
+                        printf("Logging out...\n");
+                        printf("Thank you for Banking with us.\n");
+                        break;
                     default: printf("Invalid option!\n");
                 }
             } while (opt != 5);
@@ -128,7 +156,7 @@ void login() {
             return;
         }
     }
-    printf("Login failed. Invalid ID or password.\n");
+    printf("Login failed. Invalid account number or password.\n");
 }
 
 // Deposit function
@@ -140,6 +168,7 @@ void deposit(Account* acc) {
     if (amount > 0) {
         acc->balance += amount;
         printf("Deposited %.2f successfully.\n", amount);
+        printf("New balance: %.2f\n", acc->balance);
     } else {
         printf("Invalid amount.\n");
     }
@@ -154,6 +183,7 @@ void withdraw(Account* acc) {
     if (amount > 0 && amount <= acc->balance) {
         acc->balance -= amount;
         printf("Withdrawn %.2f successfully.\n", amount);
+        printf("New balance: %.2f\n", acc->balance);
     } else {
         printf("Insufficient balance or invalid amount.\n");
     }
@@ -163,7 +193,7 @@ void withdraw(Account* acc) {
 void transfer(Account* sender) {
     int recipientId;
     float amount;
-    printf("Enter recipient ID: ");
+    printf("Enter recipient's 8-digit Account Number: ");
     scanf("%d", &recipientId);
     printf("Enter amount to transfer: ");
     scanf("%f", &amount);
@@ -175,15 +205,16 @@ void transfer(Account* sender) {
     }
 
     for (int i = 0; i < totalAccounts; i++) {
-        if (accounts[i].id == recipientId) {
+        if (accounts[i].accountNumber == recipientId) {
             sender->balance -= amount;
             accounts[i].balance += amount;
-            printf("Transferred %.2f to %s (ID: %d).\n", amount, accounts[i].name, recipientId);
+            printf("Transferred %.2f to %s (Account: %08d).\n", amount, accounts[i].name, recipientId);
+            printf("New balance: %.2f\n", sender->balance);
             return;
         }
     }
 
-    printf("Recipient ID not found.\n");
+    printf("Recipient account not found.\n");
 }
 
 // Check balance
