@@ -2,17 +2,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#include <conio.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 #define MAX_ACCOUNTS 100
 #define MAX_NAME_LEN 50
-#define MAX_PASS_LEN 10  // buffer to handle input overflow
+#define MAX_PASS_LEN 5  // 4 digits + null terminator
 #define FILENAME "accounts.txt"
+#define HISTORY_FILENAME "history_%08d.txt"
 
 typedef struct {
     int accountNumber;
     char name[MAX_NAME_LEN];
     float balance;
-    char password[5]; // 4 digits + null terminator
+    char password[MAX_PASS_LEN];
 } Account;
 
 Account accounts[MAX_ACCOUNTS];
@@ -30,7 +37,8 @@ void transfer(Account* acc);
 void clearInput();
 int generateUniqueAccountNumber();
 int isValidPassword(const char* pass);
-void getValidPassword(char* dest);
+void getPassword(char* password);
+void logTransaction(int accNum, const char* action, float amount);
 
 int main() {
     int choice;
@@ -58,6 +66,42 @@ int main() {
     } while (choice != 3);
 
     return 0;
+}
+
+void getPassword(char* password) {
+    int index = 0;
+    char ch;
+#ifdef _WIN32
+    while ((ch = _getch()) != '\r') {
+        if (ch >= '0' && ch <= '9' && index < MAX_PASS_LEN - 1) {
+            password[index++] = ch;
+            printf("*");
+        } else if (ch == '\b' && index > 0) {
+            index--;
+            printf("\b \b");
+        }
+    }
+#else
+    struct termios oldt, newt;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    while ((ch = getchar()) != '\n') {
+        if (ch >= '0' && ch <= '9' && index < MAX_PASS_LEN - 1) {
+            password[index++] = ch;
+            printf("*");
+        } else if (ch == 127 && index > 0) {
+            index--;
+            printf("\b \b");
+        }
+    }
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+#endif
+    password[index] = '\0';
+    printf("\n");
 }
 
 // Load accounts from file
@@ -114,13 +158,15 @@ int isValidPassword(const char* pass) {
     return 1;
 }
 
-// Prompt user until a valid 4-digit password is entered
-void getValidPassword(char* dest) {
-    do {
-        printf("Enter 4-digit password: ");
-        fgets(dest, MAX_PASS_LEN, stdin);
-        dest[strcspn(dest, "\n")] = 0;
-    } while (!isValidPassword(dest));
+void logTransaction(int accNum, const char* action, float amount) {
+    char filename[30];
+    sprintf(filename, HISTORY_FILENAME, accNum);
+    FILE *file = fopen(filename, "a");
+    if (file != NULL) {
+        time_t now = time(NULL);
+        fprintf(file, "%s - %s: %.2f\n", ctime(&now), action, amount);
+        fclose(file);
+    }
 }
 
 // Create a new account
@@ -136,8 +182,10 @@ void createAccount() {
     fgets(newAcc.name, MAX_NAME_LEN, stdin);
     newAcc.name[strcspn(newAcc.name, "\n")] = 0;
 
-    printf("Set 4-digit numeric password: ");
-    getValidPassword(newAcc.password);
+    do {
+        printf("Set 4-digit numeric password: ");
+        getPassword(newAcc.password);
+    } while (!isValidPassword(newAcc.password));
 
     newAcc.balance = 0.0;
     accounts[totalAccounts++] = newAcc;
@@ -151,11 +199,15 @@ void createAccount() {
 void login() {
     int accNum;
     char pass[MAX_PASS_LEN];
+    char accInput[20];
     printf("Enter 8-digit Account Number: ");
-    scanf("%d", &accNum);
-    clearInput();
+    fgets(accInput, sizeof(accInput), stdin);
+    accNum = atoi(accInput);
 
-    getValidPassword(pass);
+    do {
+        printf("Enter 4-digit password: ");
+        getPassword(pass);
+    } while (!isValidPassword(pass));
 
     for (int i = 0; i < totalAccounts; i++) {
         if (accounts[i].accountNumber == accNum && strcmp(accounts[i].password, pass) == 0) {
@@ -194,6 +246,7 @@ void deposit(Account* acc) {
         acc->balance += amount;
         printf("Deposited %.2f successfully.\n", amount);
         printf("New balance: %.2f\n", acc->balance);
+        logTransaction(acc->accountNumber, "Deposit", amount);
     } else {
         printf("Invalid amount.\n");
     }
@@ -209,6 +262,7 @@ void withdraw(Account* acc) {
         acc->balance -= amount;
         printf("Withdrawn %.2f successfully.\n", amount);
         printf("New balance: %.2f\n", acc->balance);
+        logTransaction(acc->accountNumber, "Withdraw", amount);
     } else {
         printf("Insufficient balance or invalid amount.\n");
     }
@@ -235,6 +289,8 @@ void transfer(Account* sender) {
             accounts[i].balance += amount;
             printf("Transferred %.2f to %s (Account: %08d).\n", amount, accounts[i].name, recipientId);
             printf("New balance: %.2f\n", sender->balance);
+            logTransaction(sender->accountNumber, "Transfer Sent", amount);
+            logTransaction(accounts[i].accountNumber, "Transfer Received", amount);
             return;
         }
     }
