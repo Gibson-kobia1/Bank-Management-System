@@ -5,14 +5,14 @@
 
 #define MAX_ACCOUNTS 100
 #define MAX_NAME_LEN 50
-#define MAX_PASS_LEN 20
+#define MAX_PASS_LEN 10  // buffer to handle input overflow
 #define FILENAME "accounts.txt"
 
 typedef struct {
     int accountNumber;
     char name[MAX_NAME_LEN];
     float balance;
-    char password[MAX_PASS_LEN];
+    char password[5]; // 4 digits + null terminator
 } Account;
 
 Account accounts[MAX_ACCOUNTS];
@@ -29,6 +29,8 @@ void checkBalance(Account acc);
 void transfer(Account* acc);
 void clearInput();
 int generateUniqueAccountNumber();
+int isValidPassword(const char* pass);
+void getValidPassword(char* dest);
 
 int main() {
     int choice;
@@ -62,7 +64,7 @@ int main() {
 void loadAccounts() {
     FILE *file = fopen(FILENAME, "r");
     if (file == NULL) return;
-    while (fscanf(file, "%d,%49[^,],%f,%19s", &accounts[totalAccounts].accountNumber,
+    while (fscanf(file, "%d,%49[^,],%f,%4s", &accounts[totalAccounts].accountNumber,
                   accounts[totalAccounts].name, &accounts[totalAccounts].balance,
                   accounts[totalAccounts].password) == 4) {
         totalAccounts++;
@@ -97,6 +99,30 @@ int generateUniqueAccountNumber() {
     return accNum;
 }
 
+// Validate password (must be exactly 4 digits)
+int isValidPassword(const char* pass) {
+    if (strlen(pass) != 4) {
+        printf("Please enter a four digit pin.\n");
+        return 0;
+    }
+    for (int i = 0; i < 4; i++) {
+        if (pass[i] < '0' || pass[i] > '9') {
+            printf("Please enter a four digit pin.\n");
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// Prompt user until a valid 4-digit password is entered
+void getValidPassword(char* dest) {
+    do {
+        printf("Enter 4-digit password: ");
+        fgets(dest, MAX_PASS_LEN, stdin);
+        dest[strcspn(dest, "\n")] = 0;
+    } while (!isValidPassword(dest));
+}
+
 // Create a new account
 void createAccount() {
     if (totalAccounts >= MAX_ACCOUNTS) {
@@ -109,11 +135,11 @@ void createAccount() {
     printf("Enter name: ");
     fgets(newAcc.name, MAX_NAME_LEN, stdin);
     newAcc.name[strcspn(newAcc.name, "\n")] = 0;
-    printf("Set password: ");
-    fgets(newAcc.password, MAX_PASS_LEN, stdin);
-    newAcc.password[strcspn(newAcc.password, "\n")] = 0;
-    newAcc.balance = 0.0;
 
+    printf("Set 4-digit numeric password: ");
+    getValidPassword(newAcc.password);
+
+    newAcc.balance = 0.0;
     accounts[totalAccounts++] = newAcc;
     saveAccounts();
 
@@ -128,9 +154,8 @@ void login() {
     printf("Enter 8-digit Account Number: ");
     scanf("%d", &accNum);
     clearInput();
-    printf("Enter password: ");
-    fgets(pass, MAX_PASS_LEN, stdin);
-    pass[strcspn(pass, "\n")] = 0;
+
+    getValidPassword(pass);
 
     for (int i = 0; i < totalAccounts; i++) {
         if (accounts[i].accountNumber == accNum && strcmp(accounts[i].password, pass) == 0) {

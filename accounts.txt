@@ -1,2 +1,0 @@
-00000001,Gibsoncd "c:\Users\Window\Bank-Management-System\,0.00,"
-10012554,Gibson,0.00,123
